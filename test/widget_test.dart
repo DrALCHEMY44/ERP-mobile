@@ -1,30 +1,36 @@
-// This is a basic Flutter widget test.
-//
-// To perform an interaction with a widget in your test, use the WidgetTester
-// utility in the flutter_test package. For example, you can send tap and scroll
-// gestures. You can also use WidgetTester to find child widgets in the widget
-// tree, read text, and verify that the values of widget properties are correct.
+// This is a Flutter widget test for SmartERPApp's login screen.
 
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-
+import 'package:provider/provider.dart';
 import 'package:erp_mobile/main.dart';
+import 'package:erp_mobile/providers/core_provider.dart';
+import 'package:erp_mobile/providers/inventory_provider.dart';
+import 'package:erp_mobile/providers/transaction_provider.dart';
+import 'package:erp_mobile/providers/task_provider.dart';
+import 'package:erp_mobile/providers/theme_provider.dart';
 
 void main() {
-  testWidgets('Counter increments smoke test', (WidgetTester tester) async {
+  testWidgets('SmartERP Login Screen smoke test', (WidgetTester tester) async {
     // Build our app and trigger a frame.
-    await tester.pumpWidget(const SmartERPApp());
+    await tester.pumpWidget(
+      MultiProvider(
+        providers: [
+          ChangeNotifierProvider(create: (_) => ThemeProvider()),
+        ChangeNotifierProvider(create: (_) => CoreProvider()),
+        ChangeNotifierProvider(create: (_) => InventoryProvider()),
+        ChangeNotifierProvider(create: (_) => TransactionProvider()),
+        ChangeNotifierProvider(create: (_) => TaskProvider()),
+        ],
+        child: const SmartERPApp(),
+      ),
+    );
 
-    // Verify that our counter starts at 0.
-    expect(find.text('0'), findsOneWidget);
-    expect(find.text('1'), findsNothing);
+    // Verify that the login screen title and subtitle are present.
+    expect(find.text('martERP AI'), findsOneWidget);
+    expect(find.text('AI-Powered SME Operations Platform'), findsOneWidget);
 
-    // Tap the '+' icon and trigger a frame.
-    await tester.tap(find.byIcon(Icons.add));
-    await tester.pump();
-
-    // Verify that our counter has incremented.
-    expect(find.text('0'), findsNothing);
-    expect(find.text('1'), findsOneWidget);
+    // Verify that the "Password" field and "Sign In to Account" button are present.
+    expect(find.text('Password'), findsOneWidget);
+    expect(find.text('Sign In to Account'), findsOneWidget);
   });
 }

@@ -54,6 +54,7 @@ class AppUser {
   final String tenantId;
   final String businessId;
   final UserRole role;
+  final String? businessCode;
 
   AppUser({
     required this.id,
@@ -62,5 +63,6 @@ class AppUser {
     required this.tenantId,
     required this.businessId,
     required this.role,
+    this.businessCode,
   });
 }

@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../providers/erp_provider.dart';
+import '../providers/core_provider.dart';
+import '../providers/inventory_provider.dart';
+import '../providers/transaction_provider.dart';
+import '../providers/task_provider.dart';
+import '../providers/theme_provider.dart';
 import '../services/auth_service.dart';
 import '../widgets/app_drawer.dart';
 
@@ -84,11 +88,16 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
                     return;
                   }
 
-                  final erp = Provider.of<ErpProvider>(context, listen: false);
-                  final success = await erp.recordExpense(
+                  final core = Provider.of<CoreProvider>(context, listen: false);
+    final inventory = Provider.of<InventoryProvider>(context, listen: false);
+    final transaction = Provider.of<TransactionProvider>(context, listen: false);
+    final taskProvider = Provider.of<TaskProvider>(context, listen: false);
+    final themeProvider = Provider.of<ThemeProvider>(context, listen: false);
+                  final success = await transaction.recordExpense(
                     _selectedCategory,
                     _descController.text,
                     amount,
+                    core,
                   );
 
                   if (context.mounted) {
@@ -115,8 +124,12 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final erp = Provider.of<ErpProvider>(context);
-    final expensesList = erp.expenses;
+    final core = Provider.of<CoreProvider>(context);
+    final inventory = Provider.of<InventoryProvider>(context);
+    final transaction = Provider.of<TransactionProvider>(context);
+    final taskProvider = Provider.of<TaskProvider>(context);
+    final themeProvider = Provider.of<ThemeProvider>(context);
+    final expensesList = transaction.expenses;
 
     return Scaffold(
       appBar: AppBar(title: const Text('Business Expenses')),

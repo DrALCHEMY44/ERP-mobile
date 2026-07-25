@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../models/notification_model.dart';
-import '../providers/erp_provider.dart';
+import '../providers/core_provider.dart';
+import '../providers/inventory_provider.dart';
+import '../providers/transaction_provider.dart';
+import '../providers/task_provider.dart';
+import '../providers/theme_provider.dart';
 import '../widgets/app_drawer.dart';
 
 class NotificationsScreen extends StatelessWidget {
@@ -10,17 +14,21 @@ class NotificationsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final erp = Provider.of<ErpProvider>(context);
-    final notificationsList = erp.notifications;
+    final core = Provider.of<CoreProvider>(context);
+    final inventory = Provider.of<InventoryProvider>(context);
+    final transaction = Provider.of<TransactionProvider>(context);
+    final taskProvider = Provider.of<TaskProvider>(context);
+    final themeProvider = Provider.of<ThemeProvider>(context);
+    final notificationsList = core.notifications;
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('Notifications'),
         actions: [
-          if (erp.unreadNotifications.isNotEmpty)
+          if (core.unreadNotifications.isNotEmpty)
             TextButton.icon(
               onPressed: () {
-                erp.markAllNotificationsAsRead();
+                core.markAllNotificationsAsRead();
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(content: Text('All notifications marked as read.'), behavior: SnackBarBehavior.floating),
                 );

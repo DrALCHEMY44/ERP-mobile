@@ -1,10 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:fl_chart/fl_chart.dart';
-import '../providers/erp_provider.dart';
+import '../providers/core_provider.dart';
+import '../providers/inventory_provider.dart';
+import '../providers/transaction_provider.dart';
+import '../providers/task_provider.dart';
 import '../services/auth_service.dart';
 import '../models/app_user.dart';
 import '../widgets/app_drawer.dart';
+import 'dart:ui';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -13,23 +17,44 @@ class DashboardScreen extends StatefulWidget {
   State<DashboardScreen> createState() => _DashboardScreenState();
 }
 
-class _DashboardScreenState extends State<DashboardScreen> {
+class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProviderStateMixin {
+  late AnimationController _animController;
+  late Animation<double> _fadeAnim;
+
+  @override
+  void initState() {
+    super.initState();
+    _animController = AnimationController(vsync: this, duration: const Duration(milliseconds: 800));
+    _fadeAnim = CurvedAnimation(parent: _animController, curve: Curves.easeIn);
+    _animController.forward();
+  }
+
+  @override
+  void dispose() {
+    _animController.dispose();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final erp = Provider.of<ErpProvider>(context);
+    final core = Provider.of<CoreProvider>(context);
+    final inventory = Provider.of<InventoryProvider>(context);
+    final transaction = Provider.of<TransactionProvider>(context);
+    final taskProvider = Provider.of<TaskProvider>(context);
+    
     final user = AuthService.currentUser;
 
     // Financial calculations
-    final double totalSales = erp.sales.fold(0.0, (sum, item) => sum + item.totalAmount);
-    final double totalExpenses = erp.expenses.fold(0.0, (sum, item) => sum + item.amount);
+    final double totalSales = transaction.sales.fold(0.0, (sum, item) => sum + item.totalAmount);
+    final double totalExpenses = transaction.expenses.fold(0.0, (sum, item) => sum + item.amount);
     final double netProfit = totalSales - totalExpenses;
 
     // Low stock warnings
-    final lowStockItems = erp.inventory.where((item) => item.stockLevel <= item.lowStockLevel).toList();
+    final lowStockItems = inventory.inventory.where((item) => item.stockLevel <= item.lowStockLevel).toList();
 
     // Overdue tasks
-    final overdueTasks = erp.tasks.where((task) => task.isOverdue).toList();
+    final overdueTasks = taskProvider.tasks.where((t) => t.isOverdue).toList();
 
     // Quick Actions grid based on permissions
     final List<_QuickActionData> quickActions = [];
@@ -42,31 +67,33 @@ class _DashboardScreenState extends State<DashboardScreen> {
     if (AuthService.hasPermission('manageTasks')) {
       quickActions.add(_QuickActionData('New Task', Icons.add_task, Colors.orange, '/assign-task'));
     }
-    // AI Assistant always accessible
-    quickActions.add(_QuickActionData('Ask AI Assistant', Icons.psychology, Colors.purple, '/ai-assistant'));
+    quickActions.add(_QuickActionData('AI Assistant', Icons.psychology, Colors.purple, '/ai-assistant'));
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('SmartERP AI', style: TextStyle(fontWeight: FontWeight.bold)),
+        title: const Text('Dashboard', style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 1.1)),
+        centerTitle: true,
+        elevation: 0,
+        backgroundColor: Colors.transparent,
         actions: [
           IconButton(
             icon: Stack(
               children: [
                 const Icon(Icons.notifications_none),
-                if (erp.unreadNotifications.isNotEmpty)
+                if (core.unreadNotifications.isNotEmpty)
                   Positioned(
                     right: 0,
                     top: 0,
                     child: Container(
                       padding: const EdgeInsets.all(2),
                       decoration: BoxDecoration(
-                        color: Colors.red,
-                        borderRadius: BorderRadius.circular(6),
+                        color: Colors.redAccent,
+                        borderRadius: BorderRadius.circular(8),
                       ),
-                      constraints: const BoxConstraints(minWidth: 12, minHeight: 12),
+                      constraints: const BoxConstraints(minWidth: 14, minHeight: 14),
                       child: Text(
-                        '${erp.unreadNotifications.length}',
-                        style: const TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.bold),
+                        '${core.unreadNotifications.length}',
+                        style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold),
                         textAlign: TextAlign.center,
                       ),
                     ),
@@ -75,327 +102,370 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ),
             onPressed: () => Navigator.pushNamed(context, '/notifications'),
           ),
-          IconButton(
-            icon: const Icon(Icons.chat_bubble_outline),
-            onPressed: () => Navigator.pushNamed(context, '/ai-assistant'),
-          ),
         ],
       ),
       drawer: const AppDrawer(currentRoute: '/dashboard'),
       body: RefreshIndicator(
         onRefresh: () async {
-          // Fake refresh delay
-          await Future.delayed(const Duration(milliseconds: 800));
+          await Future.wait([
+            core.loadData(),
+            inventory.loadData(),
+            transaction.loadData(),
+            taskProvider.loadData(),
+          ]);
         },
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(vertical: 16.0),
-          physics: const AlwaysScrollableScrollPhysics(),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // User Greeting
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Molo, ${user?.name ?? "User"} 👋',
-                      style: theme.textTheme.headlineMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
+        child: FadeTransition(
+          opacity: _fadeAnim,
+          child: SingleChildScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.symmetric(vertical: 8.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // User Greeting
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Welcome back, ${user?.name.split(" ")[0] ?? "User"} 👋',
+                        style: theme.textTheme.headlineMedium?.copyWith(
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        '${user?.role.displayName} • ${user?.tenantId == "tenant_douala_001" ? "Superette de l\'Avenir" : user?.tenantId == "tenant_yaounde_002" ? "Boutique Bastos" : "Your Business"}',
+                        style: theme.textTheme.titleMedium?.copyWith(color: Colors.grey.shade500),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 32),
+                
+                // Financial Stats Cards
+                SizedBox(
+                  height: 140,
+                  child: ListView(
+                    scrollDirection: Axis.horizontal,
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    children: [
+                      _statCard('Revenue', 'FCFA ${totalSales.toInt()}', Icons.trending_up, Colors.green, theme, 0),
+                      _statCard('Expenses', 'FCFA ${totalExpenses.toInt()}', Icons.trending_down, Colors.red, theme, 100),
+                      _statCard('Net Profit', 'FCFA ${netProfit.toInt()}', netProfit >= 0 ? Icons.account_balance_wallet : Icons.money_off, netProfit >= 0 ? Colors.blue : Colors.deepOrange, theme, 200),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 32),
+
+                // Operational Alerts
+                if (lowStockItems.isNotEmpty || overdueTasks.isNotEmpty) ...[
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20.0),
+                    child: Row(
+                      children: [
+                        Icon(Icons.error_outline, color: Colors.orange.shade800, size: 20),
+                        const SizedBox(width: 8),
+                        Text('Operational Alerts', style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold, color: Colors.orange.shade800)),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  
+                  // Low Stock alerts
+                  for (var item in lowStockItems.take(2))
+                    Container(
+                      margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: theme.colorScheme.errorContainer.withOpacity(0.3),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: theme.colorScheme.error.withOpacity(0.3)),
+                      ),
+                      child: ListTile(
+                        leading: Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(color: Colors.red.withOpacity(0.1), shape: BoxShape.circle),
+                          child: const Icon(Icons.warning_amber_rounded, color: Colors.red),
+                        ),
+                        title: Text(item.name, style: const TextStyle(fontWeight: FontWeight.bold)),
+                        subtitle: Text('Only ${item.stockLevel} left (Threshold: ${item.lowStockLevel})'),
+                        trailing: FilledButton.tonal(
+                          style: FilledButton.styleFrom(visualDensity: VisualDensity.compact),
+                          onPressed: () {
+                            inventory.reorderProduct(item.id, core);
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text('Reordered 50 units of ${item.name}')),
+                            );
+                          },
+                          child: const Text('Reorder'),
+                        ),
                       ),
                     ),
-                    Text(
-                      '${user?.role.displayName} at ${user?.tenantId == "tenant_douala_001" ? "Superette de l\'Avenir" : user?.tenantId == "tenant_yaounde_002" ? "Boutique Bastos" : "Your Business"}',
-                      style: theme.textTheme.bodyMedium?.copyWith(color: Colors.grey.shade600),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 20),
-              
-              // Financial Stats Cards Carousel/Horizontal List
-              SizedBox(
-                height: 124,
-                child: ListView(
-                  scrollDirection: Axis.horizontal,
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  children: [
-                    _statCard(
-                      'Revenue',
-                      'FCFA ${totalSales.toInt()}',
-                      Icons.trending_up,
-                      Colors.green,
-                      theme,
-                    ),
-                    _statCard(
-                      'Expenses',
-                      'FCFA ${totalExpenses.toInt()}',
-                      Icons.trending_down,
-                      Colors.red,
-                      theme,
-                    ),
-                    _statCard(
-                      'Net Profit',
-                      'FCFA ${netProfit.toInt()}',
-                      netProfit >= 0 ? Icons.account_balance_wallet : Icons.money_off,
-                      netProfit >= 0 ? Colors.blue : Colors.deepOrange,
-                      theme,
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 24),
 
-              // Visual Chart (Sales vs Expenses)
-              if (AuthService.hasPermission('viewReports')) ...[
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                  child: Text('Financial Performance', style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
-                ),
-                const SizedBox(height: 8),
-                Container(
-                  height: 180,
-                  margin: const EdgeInsets.symmetric(horizontal: 16),
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: theme.colorScheme.surface,
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: theme.colorScheme.outlineVariant.withValues(alpha: 0.5)),
+                  // Overdue Tasks alert
+                  for (var t in overdueTasks.take(1))
+                    Container(
+                      margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: Colors.amber.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: Colors.amber.withOpacity(0.3)),
+                      ),
+                      child: ListTile(
+                        leading: Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(color: Colors.amber.withOpacity(0.2), shape: BoxShape.circle),
+                          child: const Icon(Icons.alarm, color: Colors.amber),
+                        ),
+                        title: Text(t.title, style: const TextStyle(fontWeight: FontWeight.bold)),
+                        subtitle: Text('OVERDUE - Assigned to: ${t.assignedToName}'),
+                        trailing: IconButton(
+                          icon: const Icon(Icons.arrow_forward_ios, size: 16),
+                          onPressed: () => Navigator.pushNamed(context, '/tasks'),
+                        ),
+                      ),
+                    ),
+                  const SizedBox(height: 32),
+                ],
+
+                // Visual Chart
+                if (AuthService.hasPermission('viewReports')) ...[
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20.0),
+                    child: Text('Performance Overview', style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
                   ),
-                  child: erp.sales.isEmpty && erp.expenses.isEmpty
-                      ? const Center(child: Text('No transaction data to display in chart.'))
-                      : BarChart(
-                          BarChartData(
-                            alignment: BarChartAlignment.spaceAround,
-                            maxY: (totalSales > totalExpenses ? totalSales : totalExpenses) * 1.2,
-                            barTouchData: BarTouchData(enabled: false),
-                            titlesData: FlTitlesData(
-                              show: true,
-                              bottomTitles: AxisTitles(
-                                sideTitles: SideTitles(
-                                  showTitles: true,
-                                  getTitlesWidget: (double value, TitleMeta meta) {
-                                    const style = TextStyle(fontWeight: FontWeight.bold, fontSize: 11);
-                                    Widget text;
-                                    switch (value.toInt()) {
-                                      case 0:
-                                        text = const Text('Sales', style: style);
-                                        break;
-                                      case 1:
-                                        text = const Text('Expenses', style: style);
-                                        break;
-                                      default:
-                                        text = const Text('', style: style);
-                                        break;
-                                    }
-                                    return SideTitleWidget(meta: meta, child: text);
+                  const SizedBox(height: 16),
+                  Container(
+                    height: 220,
+                    margin: const EdgeInsets.symmetric(horizontal: 20),
+                    padding: const EdgeInsets.all(24),
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.surface,
+                      borderRadius: BorderRadius.circular(24),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.03),
+                          blurRadius: 20,
+                          offset: const Offset(0, 10),
+                        )
+                      ],
+                    ),
+                    child: transaction.sales.isEmpty && transaction.expenses.isEmpty
+                        ? Center(child: Text('No transaction data yet.', style: theme.textTheme.bodyMedium?.copyWith(color: Colors.grey)))
+                        : BarChart(
+                            BarChartData(
+                              alignment: BarChartAlignment.spaceAround,
+                              maxY: (totalSales > totalExpenses ? totalSales : totalExpenses) * 1.3,
+                              barTouchData: BarTouchData(
+                                enabled: true,
+                                touchTooltipData: BarTouchTooltipData(
+                                  getTooltipItem: (group, groupIndex, rod, rodIndex) {
+                                    return BarTooltipItem(
+                                      'FCFA ${rod.toY.toInt()}',
+                                      const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                                    );
                                   },
                                 ),
                               ),
-                              leftTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                              rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                              topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                            ),
-                            gridData: const FlGridData(show: false),
-                            borderData: FlBorderData(show: false),
-                            barGroups: [
-                              BarChartGroupData(
-                                x: 0,
-                                barRods: [
-                                  BarChartRodData(
-                                    toY: totalSales,
-                                    color: Colors.green,
-                                    width: 32,
-                                    borderRadius: BorderRadius.circular(6),
-                                  )
-                                ],
-                              ),
-                              BarChartGroupData(
-                                x: 1,
-                                barRods: [
-                                  BarChartRodData(
-                                    toY: totalExpenses,
-                                    color: Colors.red,
-                                    width: 32,
-                                    borderRadius: BorderRadius.circular(6),
-                                  )
-                                ],
-                              ),
-                            ],
-                          ),
-                        ),
-                ),
-                const SizedBox(height: 24),
-              ],
-
-              // Warning Widget: Low Stock and Overdue Tasks
-              if (lowStockItems.isNotEmpty || overdueTasks.isNotEmpty) ...[
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                  child: Text('Operational Alerts', style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold, color: Colors.orange.shade800)),
-                ),
-                const SizedBox(height: 8),
-                
-                // Render Low Stock alerts
-                for (var item in lowStockItems.take(2))
-                  Card(
-                    margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                    color: theme.colorScheme.errorContainer.withValues(alpha: 0.3),
-                    elevation: 0,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      side: BorderSide(color: theme.colorScheme.error.withValues(alpha: 0.2)),
-                    ),
-                    child: ListTile(
-                      dense: true,
-                      leading: const Icon(Icons.warning_amber_rounded, color: Colors.red),
-                      title: Text(item.name, style: const TextStyle(fontWeight: FontWeight.bold)),
-                      subtitle: Text('Running low: Only ${item.stockLevel} ${item.unit} left (threshold: ${item.lowStockLevel})'),
-                      trailing: TextButton(
-                        onPressed: () {
-                          erp.reorderProduct(item.id);
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text('Reordered 50 units of ${item.name}'), behavior: SnackBarBehavior.floating),
-                          );
-                        },
-                        child: const Text('Reorder'),
-                      ),
-                    ),
-                  ),
-
-                // Render Overdue Tasks alert
-                for (var task in overdueTasks.take(1))
-                  Card(
-                    margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                    color: const Color(0xFFFEF3C7).withValues(alpha: 0.2),
-                    elevation: 0,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      side: BorderSide(color: Colors.amber.shade300),
-                    ),
-                    child: ListTile(
-                      dense: true,
-                      leading: const Icon(Icons.alarm, color: Colors.amber),
-                      title: Text(task.title, style: const TextStyle(fontWeight: FontWeight.bold)),
-                      subtitle: Text('OVERDUE - Assigned to: ${task.assignedToName}'),
-                      trailing: TextButton(
-                        onPressed: () => Navigator.pushNamed(context, '/tasks'),
-                        child: const Text('View'),
-                      ),
-                    ),
-                  ),
-                const SizedBox(height: 24),
-              ],
-
-              // Quick Actions Grid
-              if (quickActions.isNotEmpty) ...[
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                  child: Text('Quick Actions', style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
-                ),
-                const SizedBox(height: 8),
-                GridView.builder(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 2,
-                    mainAxisSpacing: 12,
-                    crossAxisSpacing: 12,
-                    childAspectRatio: 2.2,
-                  ),
-                  itemCount: quickActions.length,
-                  itemBuilder: (context, index) {
-                    final action = quickActions[index];
-                    return InkWell(
-                      onTap: () => Navigator.pushNamed(context, action.route),
-                      borderRadius: BorderRadius.circular(16),
-                      child: Ink(
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            colors: [
-                              action.color.withValues(alpha: 0.15),
-                              action.color.withValues(alpha: 0.05),
-                            ],
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                          ),
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(color: action.color.withValues(alpha: 0.3)),
-                        ),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            CircleAvatar(
-                              radius: 18,
-                              backgroundColor: action.color.withValues(alpha: 0.2),
-                              child: Icon(action.icon, color: action.color, size: 18),
-                            ),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: Text(
-                                action.label,
-                                style: TextStyle(
-                                  color: action.color.shade800,
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 13,
+                              titlesData: FlTitlesData(
+                                show: true,
+                                bottomTitles: AxisTitles(
+                                  sideTitles: SideTitles(
+                                    showTitles: true,
+                                    getTitlesWidget: (double value, TitleMeta meta) {
+                                      final style = theme.textTheme.labelMedium?.copyWith(fontWeight: FontWeight.bold);
+                                      String text = value.toInt() == 0 ? 'Revenue' : 'Expenses';
+                                      return SideTitleWidget(meta: meta, space: 8, child: Text(text, style: style));
+                                    },
+                                  ),
                                 ),
+                                leftTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                                rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                                topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
                               ),
+                              gridData: FlGridData(
+                                show: true,
+                                drawVerticalLine: false,
+                                horizontalInterval: (totalSales > totalExpenses ? totalSales : totalExpenses) / 3 > 0 
+                                  ? (totalSales > totalExpenses ? totalSales : totalExpenses) / 3 
+                                  : 100,
+                                getDrawingHorizontalLine: (value) => FlLine(color: theme.colorScheme.outlineVariant.withOpacity(0.5), strokeWidth: 1, dashArray: [5, 5]),
+                              ),
+                              borderData: FlBorderData(show: false),
+                              barGroups: [
+                                BarChartGroupData(
+                                  x: 0,
+                                  barRods: [
+                                    BarChartRodData(
+                                      toY: totalSales,
+                                      gradient: const LinearGradient(colors: [Colors.green, Colors.lightGreenAccent], begin: Alignment.bottomCenter, end: Alignment.topCenter),
+                                      width: 40,
+                                      borderRadius: const BorderRadius.vertical(top: Radius.circular(8)),
+                                      backDrawRodData: BackgroundBarChartRodData(show: true, toY: (totalSales > totalExpenses ? totalSales : totalExpenses) * 1.3, color: theme.colorScheme.surfaceContainerHighest),
+                                    )
+                                  ],
+                                ),
+                                BarChartGroupData(
+                                  x: 1,
+                                  barRods: [
+                                    BarChartRodData(
+                                      toY: totalExpenses,
+                                      gradient: const LinearGradient(colors: [Colors.red, Colors.orangeAccent], begin: Alignment.bottomCenter, end: Alignment.topCenter),
+                                      width: 40,
+                                      borderRadius: const BorderRadius.vertical(top: Radius.circular(8)),
+                                      backDrawRodData: BackgroundBarChartRodData(show: true, toY: (totalSales > totalExpenses ? totalSales : totalExpenses) * 1.3, color: theme.colorScheme.surfaceContainerHighest),
+                                    )
+                                  ],
+                                ),
+                              ],
                             ),
-                          ],
+                          ),
+                  ),
+                  const SizedBox(height: 32),
+                ],
+
+                // Quick Actions Grid
+                if (quickActions.isNotEmpty) ...[
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20.0),
+                    child: Text('Quick Actions', style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
+                  ),
+                  const SizedBox(height: 16),
+                  GridView.builder(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: 2,
+                      mainAxisSpacing: 16,
+                      crossAxisSpacing: 16,
+                      childAspectRatio: 1.8,
+                    ),
+                    itemCount: quickActions.length,
+                    itemBuilder: (context, index) {
+                      final action = quickActions[index];
+                      return TweenAnimationBuilder(
+                        duration: Duration(milliseconds: 400 + (index * 100)),
+                        curve: Curves.easeOutBack,
+                        tween: Tween<double>(begin: 0.8, end: 1.0),
+                        builder: (context, val, child) => Transform.scale(
+                          scale: val,
+                          child: child,
                         ),
-                      ),
-                    );
-                  },
-                ),
-                const SizedBox(height: 24),
+                        child: InkWell(
+                          onTap: () => Navigator.pushNamed(context, action.route),
+                          borderRadius: BorderRadius.circular(20),
+                          child: Ink(
+                            decoration: BoxDecoration(
+                              color: theme.colorScheme.surface,
+                              borderRadius: BorderRadius.circular(20),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: action.color.withOpacity(0.1),
+                                  blurRadius: 15,
+                                  offset: const Offset(0, 5),
+                                )
+                              ],
+                              border: Border.all(color: action.color.withOpacity(0.2)),
+                            ),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.all(10),
+                                  decoration: BoxDecoration(
+                                    color: action.color.withOpacity(0.1),
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: Icon(action.icon, color: action.color, size: 20),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Text(
+                                    action.label,
+                                    style: TextStyle(
+                                      color: theme.colorScheme.onSurface,
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 14,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                  const SizedBox(height: 32),
+                ],
               ],
-            ],
+            ),
           ),
         ),
       ),
     );
   }
 
-  Widget _statCard(String title, String value, IconData icon, Color color, ThemeData theme) {
-    return Container(
-      width: 150,
-      margin: const EdgeInsets.only(right: 12),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: theme.colorScheme.outlineVariant.withValues(alpha: 0.5)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Icon(icon, color: color, size: 20),
-              Container(
-                width: 8,
-                height: 8,
-                decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-              )
-            ],
+  Widget _statCard(String title, String value, IconData icon, MaterialColor color, ThemeData theme, int delay) {
+    return TweenAnimationBuilder(
+      duration: Duration(milliseconds: 500 + delay),
+      curve: Curves.easeOutCubic,
+      tween: Tween<double>(begin: 20.0, end: 0.0),
+      builder: (context, val, child) {
+        return Transform.translate(
+          offset: Offset(val, 0),
+          child: Opacity(
+            opacity: 1 - (val / 20),
+            child: child,
           ),
-          const SizedBox(height: 10),
-          FittedBox(
-            fit: BoxFit.scaleDown,
-            child: Text(
-              value,
-              style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold, fontSize: 16),
+        );
+      },
+      child: Container(
+        width: 160,
+        margin: const EdgeInsets.only(right: 16),
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: theme.colorScheme.surface,
+          borderRadius: BorderRadius.circular(24),
+          boxShadow: [
+            BoxShadow(
+              color: color.withOpacity(0.08),
+              blurRadius: 20,
+              offset: const Offset(0, 8),
+            )
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(10)),
+                  child: Icon(icon, color: color, size: 22),
+                ),
+              ],
             ),
-          ),
-          Text(
-            title,
-            style: theme.textTheme.bodySmall?.copyWith(color: Colors.grey.shade600),
-          ),
-        ],
+            const Spacer(),
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(
+                value,
+                style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900, letterSpacing: -0.5),
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              title,
+              style: theme.textTheme.labelMedium?.copyWith(color: Colors.grey.shade600, fontWeight: FontWeight.w600),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -408,15 +478,4 @@ class _QuickActionData {
   final String route;
 
   _QuickActionData(this.label, this.icon, this.color, this.route);
-}
-
-// Extension to safely support container colors on different versions
-extension ColorContainerExt on Color {
-  static Color? tryContainer(BuildContext context) {
-    return Theme.of(context).colorScheme.primaryContainer;
-  }
-}
-
-extension ColorExt on Colors {
-  static Color get amberContainer => const Color(0xFFFEF3C7);
 }

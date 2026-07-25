@@ -1,8 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../providers/erp_provider.dart';
+import 'package:firebase_auth/firebase_auth.dart' as fb_auth;
+import '../providers/core_provider.dart';
+import '../providers/inventory_provider.dart';
+import '../providers/transaction_provider.dart';
+import '../providers/task_provider.dart';
+import '../providers/theme_provider.dart';
 import '../services/auth_service.dart';
 import '../models/app_user.dart';
+import '../generated/example.dart' as dc;
 
 class RegistrationScreen extends StatefulWidget {
   const RegistrationScreen({super.key});
@@ -17,40 +23,77 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   String _selectedIndustry = 'Retail';
+  bool _isLoadingState = false;
 
   final List<String> _industries = ['Retail', 'Construction', 'Manufacturing', 'Services', 'Logistics'];
 
-  void _handleRegister() {
+  void _handleRegister() async {
     if (_formKey.currentState!.validate()) {
-      final provider = Provider.of<ErpProvider>(context, listen: false);
-      
-      // Generate a new unique tenant ID and business ID
-      final String code = _businessNameController.text.replaceAll(' ', '_').toLowerCase();
-      final String tenantId = 'tenant_${code}_${DateTime.now().millisecondsSinceEpoch.toString().substring(10)}';
-      final String businessId = 'biz_${code}';
+      setState(() => _isLoadingState = true);
+      try {
+        final authResult = await fb_auth.FirebaseAuth.instance.createUserWithEmailAndPassword(
+          email: _emailController.text,
+          password: _passwordController.text,
+        );
+        final fbUser = authResult.user;
+        if (fbUser != null) {
+          final String code = _businessNameController.text.replaceAll(' ', '_').toLowerCase();
+          final String tenantId = 'tenant_${code}_${DateTime.now().millisecondsSinceEpoch.toString().substring(10)}';
+          final String businessId = 'biz_${code}';
 
-      // 1. Perform mock authentication login as Owner of this tenant
-      AuthService.login(
-        tenantId,
-        UserRole.businessOwner,
-        name: 'Owner of ${_businessNameController.text}',
-        email: _emailController.text,
-        businessId: businessId,
-      );
+          final now = DateTime.now();
+          final dateStr = "${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}";
+          final normalizedName = _businessNameController.text
+              .toLowerCase()
+              .replaceAll(RegExp(r'[^a-z0-9]+'), '_')
+              .replaceAll(RegExp(r'^_+|_+$'), '');
+          final String businessCode = '${normalizedName}_$dateStr';
 
-      // 2. Seed the provider with starter data for this new tenant
-      provider.seedNewTenant(tenantId, _businessNameController.text, _selectedIndustry);
+          await AuthService.loginWithUser(AppUser(
+            id: fbUser.uid,
+            name: 'Owner of ${_businessNameController.text}',
+            email: _emailController.text,
+            tenantId: tenantId,
+            businessId: businessId,
+            role: UserRole.businessOwner,
+          ));
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Registered "${_businessNameController.text}"! Tenant: $tenantId'),
-          backgroundColor: Colors.green,
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
+          final provider = Provider.of<CoreProvider>(context, listen: false);
+          await provider.seedNewTenant(tenantId, _businessNameController.text, _selectedIndustry);
 
-      // Navigate to dashboard
-      Navigator.pushNamedAndRemoveUntil(context, '/dashboard', (route) => false);
+          await dc.ExampleConnector.instance.createUser(
+            tenantId: tenantId,
+            businessId: businessId,
+            email: _emailController.text,
+            role: UserRole.businessOwner.displayName,
+          ).fullName('Owner of ${_businessNameController.text}').execute();
+
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Registered "${_businessNameController.text}"! Code: $businessCode'),
+                backgroundColor: Colors.green,
+                behavior: SnackBarBehavior.floating,
+              ),
+            );
+            Navigator.pushNamedAndRemoveUntil(context, '/dashboard', (route) => false);
+          }
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Registration failed: ${e.toString()}'),
+              backgroundColor: Colors.red,
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+      } finally {
+        if (mounted) {
+          setState(() => _isLoadingState = false);
+        }
+      }
     }
   }
 
@@ -119,14 +162,16 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
                 validator: (value) => value == null || value.length < 8 ? 'Min 8 characters' : null,
               ),
               const SizedBox(height: 32),
-              FilledButton(
-                onPressed: _handleRegister,
-                style: FilledButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                ),
-                child: const Text('Create Isolated Tenant Workspace', style: TextStyle(fontWeight: FontWeight.bold)),
-              ),
+              _isLoadingState
+                  ? const Center(child: CircularProgressIndicator())
+                  : FilledButton(
+                      onPressed: _handleRegister,
+                      style: FilledButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                      child: const Text('Create Isolated Tenant Workspace', style: TextStyle(fontWeight: FontWeight.bold)),
+                    ),
             ],
           ),
         ),

@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:fl_chart/fl_chart.dart';
-import '../providers/erp_provider.dart';
+import '../providers/core_provider.dart';
+import '../providers/inventory_provider.dart';
+import '../providers/transaction_provider.dart';
+import '../providers/task_provider.dart';
+import '../providers/theme_provider.dart';
 import '../services/auth_service.dart';
 import '../widgets/app_drawer.dart';
 
@@ -20,8 +24,12 @@ class _ReportsScreenState extends State<ReportsScreen> {
       _isGeneratingPdf = true;
     });
 
-    final erp = Provider.of<ErpProvider>(context, listen: false);
-    erp.logActivity('GENERATE_REPORT', 'Reports', 'Generated Cameroon SYSCOHADA financial compliance report PDF.');
+    final core = Provider.of<CoreProvider>(context, listen: false);
+    final inventory = Provider.of<InventoryProvider>(context, listen: false);
+    final transaction = Provider.of<TransactionProvider>(context, listen: false);
+    final taskProvider = Provider.of<TaskProvider>(context, listen: false);
+    final themeProvider = Provider.of<ThemeProvider>(context, listen: false);
+    core.logActivity('GENERATE_REPORT', 'Reports', 'Generated Cameroon SYSCOHADA financial compliance report PDF.');
 
     await Future.delayed(const Duration(seconds: 2));
 
@@ -67,22 +75,26 @@ class _ReportsScreenState extends State<ReportsScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final erp = Provider.of<ErpProvider>(context);
+    final core = Provider.of<CoreProvider>(context);
+    final inventory = Provider.of<InventoryProvider>(context);
+    final transaction = Provider.of<TransactionProvider>(context);
+    final taskProvider = Provider.of<TaskProvider>(context);
+    final themeProvider = Provider.of<ThemeProvider>(context);
 
     // Calculations
-    final double totalSales = erp.sales.fold(0.0, (sum, item) => sum + item.totalAmount);
-    final double totalExpenses = erp.expenses.fold(0.0, (sum, item) => sum + item.amount);
+    final double totalSales = transaction.sales.fold(0.0, (sum, item) => sum + item.totalAmount);
+    final double totalExpenses = transaction.expenses.fold(0.0, (sum, item) => sum + item.amount);
     final double profit = totalSales - totalExpenses;
     
     // Low stock count
-    final int lowStockCount = erp.inventory.where((p) => p.stockLevel <= p.lowStockLevel).length;
+    final int lowStockCount = inventory.inventory.where((p) => p.stockLevel <= p.lowStockLevel).length;
 
     // Cameroon Tax calculations (VAT: 19.25% standard rate)
     final double estimatedVatCollected = totalSales * 0.1925;
 
     // Top selling items calculations for PieChart
     final Map<String, int> productSales = {};
-    for (var sale in erp.sales) {
+    for (var sale in transaction.sales) {
       productSales[sale.itemName] = (productSales[sale.itemName] ?? 0) + sale.quantity;
     }
     
@@ -193,7 +205,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
                   children: [
                     _complianceRow('Standard Cameroon VAT (19.25%)', 'FCFA ${estimatedVatCollected.toInt()}'),
                     const Divider(height: 16),
-                    _complianceRow('SYSCOHADA Standard Journal Logs', '${erp.sales.length + erp.expenses.length} Records'),
+                    _complianceRow('SYSCOHADA Standard Journal Logs', '${transaction.sales.length + transaction.expenses.length} Records'),
                     const Divider(height: 16),
                     _complianceRow('Low Stock Risk Products', '$lowStockCount Items'),
                   ],

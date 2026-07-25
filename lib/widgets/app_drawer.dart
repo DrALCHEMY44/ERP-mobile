@@ -165,7 +165,7 @@ class AppDrawer extends StatelessWidget {
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
-                        'Tenant ID: ${user?.tenantId ?? "N/A"}',
+                        'Business Code: ${user?.businessCode ?? user?.tenantId ?? "N/A"}',
                         style: theme.textTheme.labelSmall?.copyWith(
                           color: theme.colorScheme.onSecondaryContainer,
                           fontWeight: FontWeight.bold,

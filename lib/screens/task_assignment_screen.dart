@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../providers/erp_provider.dart';
+import '../providers/core_provider.dart';
+import '../providers/inventory_provider.dart';
+import '../providers/transaction_provider.dart';
+import '../providers/task_provider.dart';
+import '../providers/theme_provider.dart';
 import '../services/auth_service.dart';
 import '../models/erp_task.dart';
 import '../models/app_user.dart';
@@ -39,7 +43,11 @@ class _TaskAssignmentScreenState extends State<TaskAssignmentScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final erp = Provider.of<ErpProvider>(context);
+    final core = Provider.of<CoreProvider>(context);
+    final inventory = Provider.of<InventoryProvider>(context);
+    final transaction = Provider.of<TransactionProvider>(context);
+    final taskProvider = Provider.of<TaskProvider>(context);
+    final themeProvider = Provider.of<ThemeProvider>(context);
     final user = AuthService.currentUser;
 
     // Filter available assignees to only show users in the same tenant
@@ -146,13 +154,14 @@ class _TaskAssignmentScreenState extends State<TaskAssignmentScreen> {
               FilledButton.icon(
                 onPressed: () async {
                   if (_formKey.currentState!.validate()) {
-                    final success = await erp.assignTask(
+                    final success = await taskProvider.assignTask(
                       _titleController.text,
                       _descController.text,
                       _selectedEmployeeId!,
                       _selectedEmployeeName!,
                       _selectedPriority,
                       _selectedDate,
+                      core,
                     );
 
                     if (context.mounted) {

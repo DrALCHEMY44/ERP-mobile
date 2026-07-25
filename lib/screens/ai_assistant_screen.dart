@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../providers/erp_provider.dart';
+import '../providers/core_provider.dart';
+import '../providers/inventory_provider.dart';
+import '../providers/transaction_provider.dart';
+import '../providers/task_provider.dart';
+import '../providers/theme_provider.dart';
 import '../widgets/app_drawer.dart';
 
 class AiAssistantScreen extends StatefulWidget {
@@ -55,8 +59,12 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
     _scrollToBottom();
 
     // Call the live AI model simulation in ErpProvider
-    final erp = Provider.of<ErpProvider>(context, listen: false);
-    final String response = await erp.askAi(query);
+    final core = Provider.of<CoreProvider>(context, listen: false);
+    final inventory = Provider.of<InventoryProvider>(context, listen: false);
+    final transaction = Provider.of<TransactionProvider>(context, listen: false);
+    final taskProvider = Provider.of<TaskProvider>(context, listen: false);
+    final themeProvider = Provider.of<ThemeProvider>(context, listen: false);
+    final String response = await core.askAi(query);
 
     if (mounted) {
       setState(() {

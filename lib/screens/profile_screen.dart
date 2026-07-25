@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../providers/erp_provider.dart';
+import '../providers/core_provider.dart';
+import '../providers/inventory_provider.dart';
+import '../providers/transaction_provider.dart';
+import '../providers/task_provider.dart';
+import '../providers/theme_provider.dart';
 import '../services/auth_service.dart';
 import '../models/app_user.dart';
 import '../widgets/app_drawer.dart';
@@ -16,7 +20,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final erp = Provider.of<ErpProvider>(context);
+    final core = Provider.of<CoreProvider>(context);
+    final inventory = Provider.of<InventoryProvider>(context);
+    final transaction = Provider.of<TransactionProvider>(context);
+    final taskProvider = Provider.of<TaskProvider>(context);
+    final themeProvider = Provider.of<ThemeProvider>(context);
     final user = AuthService.currentUser;
 
     // Fetch permissions list for the current role
@@ -71,7 +79,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 padding: const EdgeInsets.symmetric(vertical: 8.0),
                 child: Column(
                   children: [
-                    _infoTile(Icons.domain, 'Tenant ID Space', user?.tenantId ?? 'N/A'),
+                    _infoTile(Icons.domain, 'Business Code Space', user?.businessCode ?? user?.tenantId ?? 'N/A'),
                     const Divider(height: 1),
                     _infoTile(Icons.business_center, 'Business Identifier', user?.businessId ?? 'N/A'),
                   ],
@@ -87,10 +95,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
               child: SwitchListTile(
                 title: const Text('Dark Mode Theme'),
                 subtitle: const Text('Toggle between Light and Dark aesthetics'),
-                secondary: Icon(erp.themeMode == ThemeMode.dark ? Icons.dark_mode : Icons.light_mode, color: theme.colorScheme.primary),
-                value: erp.themeMode == ThemeMode.dark,
+                secondary: Icon(themeProvider.themeMode == ThemeMode.dark ? Icons.dark_mode : Icons.light_mode, color: theme.colorScheme.primary),
+                value: themeProvider.themeMode == ThemeMode.dark,
                 onChanged: (val) {
-                  erp.toggleThemeMode();
+                  themeProvider.toggleThemeMode();
                 },
               ),
             ),

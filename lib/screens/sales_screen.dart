@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../models/sale.dart';
-import '../providers/erp_provider.dart';
+import '../providers/core_provider.dart';
+import '../providers/inventory_provider.dart';
+import '../providers/transaction_provider.dart';
+import '../providers/task_provider.dart';
+import '../providers/theme_provider.dart';
 import '../services/auth_service.dart';
 import '../widgets/app_drawer.dart';
 
@@ -17,8 +21,12 @@ class _SalesScreenState extends State<SalesScreen> {
   String? _selectedProductId;
 
   void _showAddSaleDialog() {
-    final erp = Provider.of<ErpProvider>(context, listen: false);
-    final products = erp.inventory;
+    final core = Provider.of<CoreProvider>(context, listen: false);
+    final inventory = Provider.of<InventoryProvider>(context, listen: false);
+    final transaction = Provider.of<TransactionProvider>(context, listen: false);
+    final taskProvider = Provider.of<TaskProvider>(context, listen: false);
+    final themeProvider = Provider.of<ThemeProvider>(context, listen: false);
+    final products = inventory.inventory;
 
     if (products.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -140,7 +148,7 @@ class _SalesScreenState extends State<SalesScreen> {
                         return;
                       }
 
-                      final success = await erp.recordSale(_selectedProductId!, targetQty);
+                      final success = await transaction.recordSale(_selectedProductId!, targetQty, core, inventory);
                       
                       if (context.mounted) {
                         Navigator.pop(context);
@@ -168,8 +176,12 @@ class _SalesScreenState extends State<SalesScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final erp = Provider.of<ErpProvider>(context);
-    final salesList = erp.sales;
+    final core = Provider.of<CoreProvider>(context);
+    final inventory = Provider.of<InventoryProvider>(context);
+    final transaction = Provider.of<TransactionProvider>(context);
+    final taskProvider = Provider.of<TaskProvider>(context);
+    final themeProvider = Provider.of<ThemeProvider>(context);
+    final salesList = transaction.sales;
 
     return Scaffold(
       appBar: AppBar(title: const Text('Sales Log')),

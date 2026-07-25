@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../providers/erp_provider.dart';
+import '../providers/inventory_provider.dart';
+import '../providers/core_provider.dart';
 import '../services/auth_service.dart';
 import '../widgets/app_drawer.dart';
 
@@ -57,13 +58,13 @@ class _InventoryScreenState extends State<InventoryScreen> {
                 children: [
                   TextFormField(
                     controller: nameCtrl,
-                    decoration: const InputDecoration(labelText: 'Product Name', border: OutlineInputBorder()),
+                    decoration: const InputDecoration(labelText: 'Product Name'),
                     validator: (v) => v == null || v.isEmpty ? 'Name is required' : null,
                   ),
                   const SizedBox(height: 12),
                   DropdownButtonFormField<String>(
                     value: catCtrl.text,
-                    decoration: const InputDecoration(labelText: 'Category', border: OutlineInputBorder()),
+                    decoration: const InputDecoration(labelText: 'Category'),
                     items: const [
                       DropdownMenuItem(value: 'Food', child: Text('Food')),
                       DropdownMenuItem(value: 'Cleaning', child: Text('Cleaning')),
@@ -80,7 +81,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
                       Expanded(
                         child: TextFormField(
                           controller: stockCtrl,
-                          decoration: const InputDecoration(labelText: 'Stock Level', border: OutlineInputBorder()),
+                          decoration: const InputDecoration(labelText: 'Stock Level'),
                           keyboardType: TextInputType.number,
                           validator: (v) => v == null || int.tryParse(v) == null ? 'Invalid' : null,
                         ),
@@ -89,7 +90,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
                       Expanded(
                         child: TextFormField(
                           controller: unitCtrl,
-                          decoration: const InputDecoration(labelText: 'Unit (e.g. Bags)', border: OutlineInputBorder()),
+                          decoration: const InputDecoration(labelText: 'Unit (e.g. Bags)'),
                           validator: (v) => v == null || v.isEmpty ? 'Required' : null,
                         ),
                       ),
@@ -101,7 +102,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
                       Expanded(
                         child: TextFormField(
                           controller: costCtrl,
-                          decoration: const InputDecoration(labelText: 'Cost Price', border: OutlineInputBorder()),
+                          decoration: const InputDecoration(labelText: 'Cost Price'),
                           keyboardType: TextInputType.number,
                           validator: (v) => v == null || double.tryParse(v) == null ? 'Invalid' : null,
                         ),
@@ -110,7 +111,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
                       Expanded(
                         child: TextFormField(
                           controller: priceCtrl,
-                          decoration: const InputDecoration(labelText: 'Selling Price', border: OutlineInputBorder()),
+                          decoration: const InputDecoration(labelText: 'Selling Price'),
                           keyboardType: TextInputType.number,
                           validator: (v) => v == null || double.tryParse(v) == null ? 'Invalid' : null,
                         ),
@@ -120,7 +121,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
                   const SizedBox(height: 12),
                   TextFormField(
                     controller: thresholdCtrl,
-                    decoration: const InputDecoration(labelText: 'Low Stock Threshold', border: OutlineInputBorder()),
+                    decoration: const InputDecoration(labelText: 'Low Stock Threshold'),
                     keyboardType: TextInputType.number,
                     validator: (v) => v == null || int.tryParse(v) == null ? 'Invalid' : null,
                   ),
@@ -133,8 +134,9 @@ class _InventoryScreenState extends State<InventoryScreen> {
             FilledButton(
               onPressed: () async {
                 if (formKey.currentState!.validate()) {
-                  final erp = Provider.of<ErpProvider>(context, listen: false);
-                  final success = await erp.addProduct(
+                  final inventory = Provider.of<InventoryProvider>(context, listen: false);
+                  final core = Provider.of<CoreProvider>(context, listen: false);
+                  final success = await inventory.addProduct(
                     nameCtrl.text,
                     catCtrl.text,
                     int.parse(stockCtrl.text),
@@ -142,6 +144,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
                     double.parse(costCtrl.text),
                     double.parse(priceCtrl.text),
                     int.parse(thresholdCtrl.text),
+                    core
                   );
 
                   if (context.mounted) {
@@ -167,13 +170,14 @@ class _InventoryScreenState extends State<InventoryScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final erp = Provider.of<ErpProvider>(context);
+    final inventoryProvider = Provider.of<InventoryProvider>(context);
+    final coreProvider = Provider.of<CoreProvider>(context, listen: false);
 
     // Categories list for filtering
-    final categories = ['All', ...erp.inventory.map((item) => item.category).toSet()];
+    final categories = ['All', ...inventoryProvider.inventory.map((item) => item.category).toSet()];
 
     // Filter items
-    final items = erp.inventory.where((item) {
+    final items = inventoryProvider.inventory.where((item) {
       final matchesSearch = item.name.toLowerCase().contains(_searchQuery) ||
           item.category.toLowerCase().contains(_searchQuery);
       final matchesCategory = _selectedCategory == 'All' || item.category == _selectedCategory;
@@ -200,7 +204,6 @@ class _InventoryScreenState extends State<InventoryScreen> {
                     suffixIcon: _searchController.text.isNotEmpty
                         ? IconButton(icon: const Icon(Icons.clear), onPressed: () => _searchController.clear())
                         : null,
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                   ),
                 ),
                 const SizedBox(height: 12),
@@ -234,8 +237,15 @@ class _InventoryScreenState extends State<InventoryScreen> {
           // Inventory List
           Expanded(
             child: items.isEmpty
-                ? const Center(
-                    child: Text('No products matching filters.'),
+                ? Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.inventory_2_outlined, size: 64, color: Colors.grey.shade400),
+                        const SizedBox(height: 16),
+                        Text('No products matching filters.', style: theme.textTheme.bodyLarge?.copyWith(color: Colors.grey.shade600)),
+                      ],
+                    ),
                   )
                 : ListView.builder(
                     padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -247,19 +257,19 @@ class _InventoryScreenState extends State<InventoryScreen> {
                       return Card(
                         margin: const EdgeInsets.only(bottom: 12),
                         child: Padding(
-                          padding: const EdgeInsets.all(12.0),
+                          padding: const EdgeInsets.all(16.0),
                           child: Row(
                             children: [
                               // Status color indicator
                               Container(
-                                width: 6,
+                                width: 4,
                                 height: 50,
                                 decoration: BoxDecoration(
                                   color: isLowStock ? Colors.red : Colors.green,
-                                  borderRadius: BorderRadius.circular(3),
+                                  borderRadius: BorderRadius.circular(2),
                                 ),
                               ),
-                              const SizedBox(width: 12),
+                              const SizedBox(width: 16),
                               
                               // Product Details
                               Expanded(
@@ -274,14 +284,14 @@ class _InventoryScreenState extends State<InventoryScreen> {
                                       'Category: ${item.category} • Cost: FCFA ${item.costPrice.toInt()}',
                                       style: theme.textTheme.bodySmall?.copyWith(color: Colors.grey.shade600),
                                     ),
-                                    const SizedBox(height: 4),
+                                    const SizedBox(height: 8),
                                     Row(
                                       children: [
                                         Text(
                                           'Stock: ${item.stockLevel} ${item.unit}',
                                           style: TextStyle(
                                             fontWeight: FontWeight.bold,
-                                            color: isLowStock ? Colors.red : Colors.black87,
+                                            color: isLowStock ? Colors.red : theme.colorScheme.onSurface,
                                             fontSize: 13,
                                           ),
                                         ),
@@ -290,9 +300,9 @@ class _InventoryScreenState extends State<InventoryScreen> {
                                           Container(
                                             padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                             decoration: BoxDecoration(
-                                              color: Colors.red.shade50,
+                                              color: Colors.red.withOpacity(0.1),
                                               borderRadius: BorderRadius.circular(4),
-                                              border: Border.all(color: Colors.red.shade200),
+                                              border: Border.all(color: Colors.red.withOpacity(0.3)),
                                             ),
                                             child: const Text(
                                               'LOW STOCK',
@@ -316,10 +326,10 @@ class _InventoryScreenState extends State<InventoryScreen> {
                                       color: theme.colorScheme.primary,
                                     ),
                                   ),
-                                  const SizedBox(height: 4),
+                                  const SizedBox(height: 8),
                                   OutlinedButton.icon(
                                     onPressed: () {
-                                      erp.reorderProduct(item.id);
+                                      inventoryProvider.reorderProduct(item.id, coreProvider);
                                       ScaffoldMessenger.of(context).showSnackBar(
                                         SnackBar(
                                           content: Text('Supplier Order Placed: Restocked 50 ${item.unit} for ${item.name}'),
@@ -327,11 +337,12 @@ class _InventoryScreenState extends State<InventoryScreen> {
                                         ),
                                       );
                                     },
-                                    icon: const Icon(Icons.refresh, size: 12),
-                                    label: const Text('Reorder', style: TextStyle(fontSize: 10)),
+                                    icon: const Icon(Icons.refresh, size: 14),
+                                    label: const Text('Reorder', style: TextStyle(fontSize: 12)),
                                     style: OutlinedButton.styleFrom(
-                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 0),
-                                      minimumSize: const Size(60, 24),
+                                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 0),
+                                      minimumSize: const Size(80, 32),
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                                     ),
                                   ),
                                 ],
@@ -346,9 +357,10 @@ class _InventoryScreenState extends State<InventoryScreen> {
         ],
       ),
       floatingActionButton: AuthService.hasPermission('manageInventory')
-          ? FloatingActionButton(
+          ? FloatingActionButton.extended(
               onPressed: _showAddProductDialog,
-              child: const Icon(Icons.add),
+              icon: const Icon(Icons.add),
+              label: const Text('Add Product'),
             )
           : null,
     );
