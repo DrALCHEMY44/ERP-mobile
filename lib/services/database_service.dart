@@ -9,7 +9,7 @@ class DatabaseService {
       if (Firebase.apps.isEmpty) {
         await Firebase.initializeApp(
           options: const FirebaseOptions(
-            apiKey: 'AIzaSyBLz17gqjOspNDC-GNf3Nx1fbLhxcZUDBA',
+            //apiKey: 'AIzaSyBLz17gqjOspNDC-GNf3Nx1fbLhxcZUDBA',
             appId: '1:869525671507:android:da21d102e3b1c6765140a6',
             messagingSenderId: '869525671507',
             projectId: 'studio-8058744913-5a601',
